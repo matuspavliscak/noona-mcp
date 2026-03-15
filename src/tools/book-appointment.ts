@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { readFileSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import {
   getCompany,
   getEmployees,
@@ -8,10 +11,26 @@ import {
 } from "../noona-api.js";
 import { fetchTimeslots } from "../timeslots.js";
 
+interface CustomerConfig {
+  customerName?: string;
+  customerPhone?: string;
+  phoneCountryCode?: string;
+  customerEmail?: string;
+}
+
+function loadCustomerConfig(): CustomerConfig {
+  try {
+    const configPath = join(homedir(), ".noona", "config.json");
+    return JSON.parse(readFileSync(configPath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
 export const bookAppointmentTool = {
   name: "book-appointment",
   description:
-    "Book an appointment at a Noona company. Creates a reservation and confirms it. Employee is optional.",
+    "Book an appointment at a Noona company. Creates a reservation and confirms it. Employee is optional. Customer contact fields are optional if ~/.noona/config.json exists.",
   parameters: {
     companySlug: z
       .string()
@@ -19,15 +38,30 @@ export const bookAppointmentTool = {
     serviceName: z.string().describe("Service name (e.g. Classic Haircut)"),
     date: z.string().describe("Date in YYYY-MM-DD format (e.g. 2026-03-21)"),
     time: z.string().describe("Time in HH:MM format (e.g. 14:00)"),
-    customerName: z.string().describe("Customer full name"),
+    customerName: z
+      .string()
+      .optional()
+      .describe(
+        "Customer full name (optional — falls back to ~/.noona/config.json)"
+      ),
     customerPhone: z
       .string()
-      .describe("Customer phone number without country code (e.g. 123456789)"),
+      .optional()
+      .describe(
+        "Customer phone number without country code (optional — falls back to ~/.noona/config.json)"
+      ),
     phoneCountryCode: z
       .string()
-      .default("420")
-      .describe("Phone country code without + (default: 420)"),
-    customerEmail: z.string().describe("Customer email address"),
+      .optional()
+      .describe(
+        "Phone country code without + (optional — falls back to ~/.noona/config.json, then 420)"
+      ),
+    customerEmail: z
+      .string()
+      .optional()
+      .describe(
+        "Customer email address (optional — falls back to ~/.noona/config.json)"
+      ),
     employeeName: z
       .string()
       .optional()
@@ -48,13 +82,37 @@ export const bookAppointmentTool = {
     serviceName: string;
     date: string;
     time: string;
-    customerName: string;
-    customerPhone: string;
-    phoneCountryCode: string;
-    customerEmail: string;
+    customerName?: string;
+    customerPhone?: string;
+    phoneCountryCode?: string;
+    customerEmail?: string;
     employeeName?: string;
   }) => {
     try {
+      // Load customer defaults from config file
+      const config = loadCustomerConfig();
+      const name = customerName || config.customerName;
+      const phone = customerPhone || config.customerPhone;
+      const countryCode = phoneCountryCode || config.phoneCountryCode || "420";
+      const email = customerEmail || config.customerEmail;
+
+      if (!name || !phone || !email) {
+        const missing = [
+          !name && "customerName",
+          !phone && "customerPhone",
+          !email && "customerEmail",
+        ].filter(Boolean);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Missing required contact info: ${missing.join(", ")}. Either pass them as parameters or create ~/.noona/config.json with these fields.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
       // 1. Resolve company
       const company = await getCompany(companySlug);
 
@@ -148,8 +206,20 @@ export const bookAppointmentTool = {
         };
       }
 
-      // 5. Create reservation
-      const startsAt = `${date}T${time}:00`;
+      // 5. Create reservation (with timezone offset)
+      let startsAt = `${date}T${time}:00`;
+      if (company.timezone) {
+        const local = new Date(`${date}T${time}:00`);
+        const offset = new Intl.DateTimeFormat("en", {
+          timeZone: company.timezone,
+          timeZoneName: "longOffset",
+        })
+          .formatToParts(local)
+          .find((p) => p.type === "timeZoneName")?.value ?? "";
+        // "GMT+01:00" → "+01:00", "GMT" → "+00:00"
+        const tz = offset === "GMT" ? "+00:00" : offset.replace("GMT", "");
+        startsAt = `${date}T${time}:00${tz}`;
+      }
       const reservation = await createReservation(
         company.id,
         [service.id],
@@ -160,10 +230,10 @@ export const bookAppointmentTool = {
       // 6. Confirm booking
       const booking = await confirmBooking(
         reservation.id,
-        customerName,
-        phoneCountryCode,
-        customerPhone,
-        customerEmail
+        name,
+        countryCode,
+        phone,
+        email
       );
 
       const text = [
@@ -174,7 +244,7 @@ export const bookAppointmentTool = {
         `Employee: ${booking.employee_name || employee?.name || "assigned by shop"}`,
         `Date/Time: ${date} at ${time}`,
         `Location: ${booking.company_name || company.name}`,
-        `Customer: ${customerName} (${customerEmail})`,
+        `Customer: ${name} (${email})`,
         `Status: ${booking.status}`,
       ].join("\n");
 

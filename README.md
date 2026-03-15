@@ -92,7 +92,7 @@ EOF
 chmod 600 ~/.noona/config.json
 ```
 
-This file is read by Claude when booking appointments. It keeps your personal info out of skill files and conversation history. The `chmod 600` ensures only your user can read it.
+The `book-appointment` tool reads this file automatically when contact fields are omitted. This keeps your personal info out of skill files, conversation history, and LLM context. The `chmod 600` ensures only your user can read it.
 
 ## Tools
 
@@ -102,7 +102,7 @@ This file is read by Claude when booking appointments. It keeps your personal in
 | `get-availability` | Check available timeslots. Employee is optional. |
 | `list-employees` | List all employees at a company. |
 | `list-services` | List all services with prices. |
-| `book-appointment` | Book an appointment (reserve + confirm). |
+| `book-appointment` | Book an appointment (reserve + confirm). Contact fields optional if `~/.noona/config.json` exists. |
 | `cancel-booking` | Cancel an existing booking by ID. |
 
 ## Usage
@@ -123,16 +123,18 @@ Tell Claude to set one up for you:
 
 > "I'd like to create a new skill called /barber to book my appointments at https://noona.app/mybarbershop"
 
-Claude will:
-1. Look up the business (and ask you to pick a location if it's a brand with multiple branches)
-2. Show you the available services — you pick one
-3. Show you the employees — you pick your favorite or say "any"
-4. Ask for your contact info (name, phone, email) and save it to `~/.noona/config.json`
-5. Create the skill file at `~/.claude/skills/barber/SKILL.md`
+Claude will walk you through a guided setup, **one question at a time**:
 
-From then on, just say "I need a haircut" or `/barber Saturday` and Claude handles the rest.
+1. **Location** — if the business has multiple branches, pick one as your default
+2. **Service** — pick your go-to service from the list
+3. **Barber/employee** — pick your favorite or say "no preference"
+4. **Contact info** — name, phone, email — saved to `~/.noona/config.json` (not in the skill file)
 
-You can create as many skills as you want — `/massage`, `/nails`, `/dentist` — each pointing to a different Noona business with your preferred settings.
+The skill file (`~/.claude/skills/barber/SKILL.md`) stores only your preferences (location, service, employee) — no personal data. Contact info is read from `~/.noona/config.json` by the MCP server at booking time.
+
+From then on, just say `/barber` and Claude shows availability for your preferred setup. Pick a time and you're booked.
+
+You can create multiple skills — `/massage`, `/nails`, `/dentist` — each pointing to a different Noona business with your preferred settings. They all share the same `~/.noona/config.json` for contact info.
 
 ## License
 
