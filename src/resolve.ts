@@ -6,6 +6,7 @@ import {
 } from "./noona-api.js";
 
 interface ToolError {
+  [key: string]: unknown;
   content: [{ type: "text"; text: string }];
   isError: true;
 }
