@@ -134,6 +134,8 @@ The skill file (`~/.claude/skills/barber/SKILL.md`) stores only your preferences
 
 From then on, just say `/barber` and Claude shows availability for your preferred setup. Pick a time and you're booked.
 
+![Booking a barber appointment from the CLI](assets/barber-cli.png)
+
 You can create multiple skills — `/massage`, `/nails`, `/dentist` — each pointing to a different Noona business with your preferred settings. They all share the same `~/.noona/config.json` for contact info.
 
 ## License
