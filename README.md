@@ -105,81 +105,34 @@ This file is read by Claude when booking appointments. It keeps your personal in
 | `book-appointment` | Book an appointment (reserve + confirm). |
 | `cancel-booking` | Cancel an existing booking by ID. |
 
-## Creating a Skill
+## Usage
 
-The MCP server is generic — it works with any Noona business. To create a personalized booking shortcut (e.g., `/barber`, `/massage`), create a **Claude Code skill** that stores your preferences and tells Claude which MCP tools to call.
+You can use the tools directly, or create a **Claude Code skill** for businesses you visit regularly.
 
-### Step-by-step
+### Direct usage
 
-1. **Find your business.** Ask Claude:
-   > "Use get-company-info to look up https://noona.app/mybusiness"
+Just ask Claude:
 
-   If it's a brand with multiple locations, Claude will list them. Pick your location.
+> "Check availability at noona.app/mybarbershop"
+>
+> "Book me a haircut at mybarbershop tomorrow at 14:00"
 
-2. **Browse services.** Ask Claude:
-   > "List services at mybusiness-location"
+### Creating a skill (recommended)
 
-3. **Browse employees.** Ask Claude:
-   > "List employees at mybusiness-location"
+Tell Claude to set one up for you:
 
-4. **Create the skill.** Create a file at `~/.claude/skills/<name>/SKILL.md`:
+> "I'd like to create a new skill called /barber to book my appointments at https://noona.app/mybarbershop"
 
-```markdown
----
-name: massage
-description: Book massages at My Massage Place. Use when the user wants to book a massage.
-argument-hint: "[date or day]"
----
+Claude will:
+1. Look up the business (and ask you to pick a location if it's a brand with multiple branches)
+2. Show you the available services — you pick one
+3. Show you the employees — you pick your favorite or say "any"
+4. Ask for your contact info (name, phone, email) and save it to `~/.noona/config.json`
+5. Create the skill file at `~/.claude/skills/barber/SKILL.md`
 
-# Massage Booking
+From then on, just say "I need a haircut" or `/barber Saturday` and Claude handles the rest.
 
-## Config
-- **Company slug**: `mymassageplace`
-- **Preferred service**: Deep Tissue Massage
-- **Preferred employee**: (none — any therapist is fine)
-- **Customer details**: Read from `~/.noona/config.json`
-
-## MCP tools (all prefixed `mcp__noona__`)
-
-### Check availability
-**`get-availability`** with:
-- `companySlug`: "mymassageplace"
-- `serviceName`: "Deep Tissue Massage"
-- (no `employeeName` — check all therapists)
-
-### Book
-**`book-appointment`** — read `~/.noona/config.json` first. Use:
-- `companySlug`: "mymassageplace"
-- `serviceName`: "Deep Tissue Massage"
-- `date`, `time`: from user
-- Customer details from config file
-
-### Cancel
-**`cancel-booking`** with the booking ID.
-
-## Workflow
-1. Check availability
-2. Present options to user
-3. Read `~/.noona/config.json` for customer details
-4. **Confirm with user before booking**
-5. Report booking ID
-```
-
-That's it. Now `/massage` will check availability and book at your massage place.
-
-## Architecture
-
-```
-noona-mcp (generic MCP server)     Skills (personal config)
-├── get-company-info                ├── /barber → mybarbershop + preferred barber
-├── get-availability                ├── /massage → mymassageplace + any therapist
-├── list-employees                  └── /nails → mynailsalon + preferred tech
-├── list-services
-├── book-appointment
-└── cancel-booking
-
-~/.noona/config.json (contact info, shared across all skills)
-```
+You can create as many skills as you want — `/massage`, `/nails`, `/dentist` — each pointing to a different Noona business with your preferred settings.
 
 ## License
 
