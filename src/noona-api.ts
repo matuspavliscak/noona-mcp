@@ -1,7 +1,7 @@
 import axios from "axios";
 import { NOONA_API_BASE } from "./config.js";
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: NOONA_API_BASE,
   paramsSerializer: (params) => {
     const parts: string[] = [];
@@ -21,7 +21,7 @@ const api = axios.create({
 });
 
 // Simple in-memory cache for the session
-const cache = new Map<string, { data: any; ts: number }>();
+const cache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 function getCached<T>(key: string): T | null {
@@ -30,7 +30,7 @@ function getCached<T>(key: string): T | null {
   return null;
 }
 
-function setCache(key: string, data: any) {
+function setCache(key: string, data: unknown) {
   cache.set(key, { data, ts: Date.now() });
 }
 
@@ -172,7 +172,12 @@ export async function createReservation(
   startsAt: string,
   employeeId?: string
 ): Promise<Reservation> {
-  const body: Record<string, any> = {
+  const body: {
+    company: string;
+    event_types: string[];
+    starts_at: string;
+    employee?: string;
+  } = {
     company: companyId,
     event_types: eventTypeIds,
     starts_at: startsAt,

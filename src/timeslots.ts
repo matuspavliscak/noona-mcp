@@ -1,5 +1,4 @@
-import axios from "axios";
-import { NOONA_API_BASE } from "./config.js";
+import { api } from "./noona-api.js";
 
 export interface Timeslot {
   date: string;
@@ -23,7 +22,7 @@ export async function fetchTimeslots(
   endDate: string,
   employeeId?: string
 ): Promise<Timeslot[]> {
-  const params: Record<string, any> = {
+  const params: Record<string, string | string[]> = {
     start_date: startDate,
     end_date: endDate,
     "event_type_ids[]": eventTypeIds,
@@ -33,14 +32,14 @@ export async function fetchTimeslots(
     params.employee_id = employeeId;
   }
 
-  const { data } = await axios.get(
-    `${NOONA_API_BASE}/companies/${companyId}/time_slots`,
+  const { data } = await api.get(
+    `/companies/${companyId}/time_slots`,
     { params }
   );
 
   // The API returns an array of { date, slots, status } objects
   const timeslots: Timeslot[] = (Array.isArray(data) ? data : data.data || [])
-    .filter((ts: any) => ts.slots && ts.slots.length > 0);
+    .filter((ts: Timeslot) => ts.slots && ts.slots.length > 0);
 
   return timeslots;
 }
