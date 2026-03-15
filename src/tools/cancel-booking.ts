@@ -31,9 +31,15 @@ export const cancelBookingTool = {
           },
         ],
       };
-    } catch (error: any) {
-      const message =
-        error.response?.data?.message || error.message || String(error);
+    } catch (error: unknown) {
+      let message: string;
+      if (typeof error === "object" && error !== null && "response" in error) {
+        const resp = (error as { response?: { data?: { message?: string } } })
+          .response;
+        message = resp?.data?.message || (error instanceof Error ? error.message : String(error));
+      } else {
+        message = error instanceof Error ? error.message : String(error);
+      }
       return {
         content: [
           {
