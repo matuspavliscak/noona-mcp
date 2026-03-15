@@ -1,0 +1,24 @@
+{
+  "name": "noona-mcp",
+  "version": "2.0.0",
+  "description": "MCP server for the Noona booking platform — check availability, book appointments, manage bookings at any Noona business",
+  "type": "module",
+  "module": "./src/index.ts",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.7",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "axios": "^1.8.4",
+    "zod": "^3.24.2"
+  }
+}
