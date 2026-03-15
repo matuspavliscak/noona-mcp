@@ -5,7 +5,7 @@ import { getCompany, getEnterprise } from "../noona-api.js";
  * Parses a Noona URL or slug into a clean slug.
  * Handles: "https://noona.app/cs/myshop", "noona.app/myshop", "myshop"
  */
-function parseSlug(input: string): string {
+export function parseSlug(input: string): string {
   let slug = input.trim();
 
   // Strip protocol and domain
@@ -21,6 +21,25 @@ function parseSlug(input: string): string {
   return slug;
 }
 
+function isNotFound(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    (error as { response?: { status?: number } }).response?.status === 404
+  );
+}
+
+function formatError(error: unknown): string {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const resp = (error as { response?: { data?: { message?: string } } })
+      .response;
+    if (resp?.data?.message) return resp.data.message;
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 export const getCompanyInfoTool = {
   name: "get-company-info",
   description:
@@ -34,6 +53,18 @@ export const getCompanyInfoTool = {
   },
   handler: async ({ company: input }: { company: string }) => {
     const slug = parseSlug(input);
+
+    if (!slug) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "Could not parse a valid slug from the input.",
+          },
+        ],
+        isError: true,
+      };
+    }
 
     // Try as a single company first
     try {
@@ -51,8 +82,19 @@ export const getCompanyInfoTool = {
       return {
         content: [{ type: "text" as const, text: lines.join("\n") }],
       };
-    } catch {
-      // Not a company slug — try as enterprise
+    } catch (error: unknown) {
+      if (!isNotFound(error)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to look up company "${slug}": ${formatError(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      // 404 — not a company slug, try as enterprise below
     }
 
     // Try as enterprise (brand with multiple locations)
@@ -75,8 +117,18 @@ export const getCompanyInfoTool = {
           },
         ],
       };
-    } catch {
-      // Not found as either
+    } catch (error: unknown) {
+      if (!isNotFound(error)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to look up brand "${slug}": ${formatError(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
     }
 
     return {
