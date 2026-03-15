@@ -1,6 +1,15 @@
 import { z } from "zod";
-import { getCompany, getEmployees, getEventTypes } from "../noona-api.js";
+import { getCompany } from "../noona-api.js";
 import { fetchTimeslots } from "../timeslots.js";
+import { resolveEmployee, resolveService } from "../resolve.js";
+
+/** Format a Date as YYYY-MM-DD in local time. */
+export function getLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export const getAvailabilityTool = {
   name: "get-availability",
@@ -12,7 +21,9 @@ export const getAvailabilityTool = {
       .describe("Company slug on Noona (e.g. buddybarbershopdejvice)"),
     serviceName: z
       .string()
-      .describe("Service name to check availability for (e.g. Classic Haircut)"),
+      .describe(
+        "Service name to check availability for (e.g. Classic Haircut)"
+      ),
     employeeName: z
       .string()
       .optional()
@@ -39,51 +50,22 @@ export const getAvailabilityTool = {
     // 2. Resolve employee (optional)
     let employee: { id: string; name: string } | undefined;
     if (employeeName) {
-      const employees = await getEmployees(company.id);
-      employee = employees.find(
-        (e) => e.name.toLowerCase() === employeeName.toLowerCase()
-      );
-      if (!employee) {
-        const names = employees.map((e) => e.name).join(", ");
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Employee "${employeeName}" not found. Available employees: ${names}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+      const result = await resolveEmployee(company.id, employeeName);
+      if (!result.ok) return result.response;
+      employee = result.value;
     }
 
-    // 3. Resolve service (case-insensitive, also try partial match)
-    const eventTypes = await getEventTypes(company.id);
-    const serviceNameLower = serviceName.toLowerCase();
-    const service =
-      eventTypes.find((e) => e.title.toLowerCase() === serviceNameLower) ||
-      eventTypes.find((e) =>
-        e.title.toLowerCase().includes(serviceNameLower)
-      );
-    if (!service) {
-      const names = eventTypes.map((e) => e.title).join(", ");
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Service "${serviceName}" not found. Available services: ${names}`,
-          },
-        ],
-        isError: true,
-      };
-    }
+    // 3. Resolve service
+    const serviceResult = await resolveService(company.id, serviceName);
+    if (!serviceResult.ok) return serviceResult.response;
+    const service = serviceResult.value;
 
-    // 4. Fetch timeslots via official API
+    // 4. Fetch timeslots — use local date to avoid UTC date-boundary issues
     const now = new Date();
-    const startDate = now.toISOString().split("T")[0];
+    const startDate = getLocalDateString(now);
     const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() + days);
-    const endDate = cutoff.toISOString().split("T")[0];
+    const endDate = getLocalDateString(cutoff);
 
     const timeslots = await fetchTimeslots(
       company.id,

@@ -5,7 +5,8 @@
   "type": "module",
   "module": "./src/index.ts",
   "scripts": {
-    "start": "npx tsx src/index.ts"
+    "start": "npx tsx src/index.ts",
+    "test": "vitest run"
   },
   "license": "MIT",
   "engines": {
@@ -14,7 +15,8 @@
   "devDependencies": {
     "@types/node": "^20.19.7",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

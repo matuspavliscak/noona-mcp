@@ -4,12 +4,11 @@ import { homedir } from "os";
 import { join } from "path";
 import {
   getCompany,
-  getEmployees,
-  getEventTypes,
   createReservation,
   confirmBooking,
 } from "../noona-api.js";
 import { fetchTimeslots } from "../timeslots.js";
+import { resolveEmployee, resolveService, formatError } from "../resolve.js";
 
 interface CustomerConfig {
   customerName?: string;
@@ -19,12 +18,42 @@ interface CustomerConfig {
 }
 
 function loadCustomerConfig(): CustomerConfig {
+  const configPath = join(homedir(), ".noona", "config.json");
   try {
-    const configPath = join(homedir(), ".noona", "config.json");
     return JSON.parse(readFileSync(configPath, "utf-8"));
-  } catch {
+  } catch (error: unknown) {
+    const isNotFound =
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT";
+    if (!isNotFound) {
+      console.error(
+        `Warning: failed to read ${configPath}:`,
+        error instanceof Error ? error.message : error
+      );
+    }
     return {};
   }
+}
+
+/**
+ * Get the UTC offset string (e.g. "+01:00") for a given IANA timezone
+ * at a specific local date/time.
+ */
+export function getUtcOffset(
+  timezone: string,
+  date: string,
+  time: string
+): string {
+  const dt = new Date(`${date}T${time}:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    timeZoneName: "longOffset",
+  }).formatToParts(dt);
+  const offsetPart = parts.find((p) => p.type === "timeZoneName");
+  // longOffset gives "GMT+01:00" or "GMT" for UTC
+  const raw = offsetPart?.value || "GMT";
+  return raw === "GMT" ? "+00:00" : raw.replace("GMT", "");
 }
 
 /**
@@ -32,21 +61,20 @@ function loadCustomerConfig(): CustomerConfig {
  * Timeslots from the API are in the shop's local time, so we must send them
  * back with the matching offset (e.g. +01:00 for CET, +02:00 for CEST).
  */
-function buildStartsAt(date: string, time: string, timezone?: string): string {
+export function buildStartsAt(
+  date: string,
+  time: string,
+  timezone?: string
+): string {
   const naive = `${date}T${time}:00.000`;
   if (!timezone) return `${naive}+00:00`;
   try {
-    const instant = new Date(`${naive}Z`);
-    const utcParts = instant.toLocaleString("en-US", { timeZone: "UTC" });
-    const tzParts = instant.toLocaleString("en-US", { timeZone: timezone });
-    const offsetMs =
-      new Date(tzParts).getTime() - new Date(utcParts).getTime();
-    const sign = offsetMs >= 0 ? "+" : "-";
-    const absMin = Math.round(Math.abs(offsetMs) / 60000);
-    const hh = String(Math.floor(absMin / 60)).padStart(2, "0");
-    const mm = String(absMin % 60).padStart(2, "0");
-    return `${naive}${sign}${hh}:${mm}`;
+    const offset = getUtcOffset(timezone, date, time);
+    return `${naive}${offset}`;
   } catch {
+    console.error(
+      `Warning: unknown timezone "${timezone}", falling back to UTC`
+    );
     return `${naive}+00:00`;
   }
 }
@@ -60,8 +88,14 @@ export const bookAppointmentTool = {
       .string()
       .describe("Company slug on Noona (e.g. buddybarbershopdejvice)"),
     serviceName: z.string().describe("Service name (e.g. Classic Haircut)"),
-    date: z.string().describe("Date in YYYY-MM-DD format (e.g. 2026-03-21)"),
-    time: z.string().describe("Time in HH:MM format (e.g. 14:00)"),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format")
+      .describe("Date in YYYY-MM-DD format (e.g. 2026-03-21)"),
+    time: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Expected HH:MM format")
+      .describe("Time in HH:MM format (e.g. 14:00)"),
     customerName: z
       .string()
       .optional()
@@ -143,44 +177,15 @@ export const bookAppointmentTool = {
       // 2. Resolve employee (optional)
       let employee: { id: string; name: string } | undefined;
       if (employeeName) {
-        const employees = await getEmployees(company.id);
-        employee = employees.find(
-          (e) => e.name.toLowerCase() === employeeName.toLowerCase()
-        );
-        if (!employee) {
-          const names = employees.map((e) => e.name).join(", ");
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Employee "${employeeName}" not found. Available: ${names}`,
-              },
-            ],
-            isError: true,
-          };
-        }
+        const result = await resolveEmployee(company.id, employeeName);
+        if (!result.ok) return result.response;
+        employee = result.value;
       }
 
       // 3. Resolve service
-      const eventTypes = await getEventTypes(company.id);
-      const serviceNameLower = serviceName.toLowerCase();
-      const service =
-        eventTypes.find((e) => e.title.toLowerCase() === serviceNameLower) ||
-        eventTypes.find((e) =>
-          e.title.toLowerCase().includes(serviceNameLower)
-        );
-      if (!service) {
-        const names = eventTypes.map((e) => e.title).join(", ");
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Service "${serviceName}" not found. Available: ${names}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+      const serviceResult = await resolveService(company.id, serviceName);
+      if (!serviceResult.ok) return serviceResult.response;
+      const service = serviceResult.value;
 
       // 4. Verify slot is available
       const timeslots = await fetchTimeslots(
@@ -263,14 +268,12 @@ export const bookAppointmentTool = {
       return {
         content: [{ type: "text" as const, text }],
       };
-    } catch (error: any) {
-      const message =
-        error.response?.data?.message || error.message || String(error);
+    } catch (error: unknown) {
       return {
         content: [
           {
             type: "text" as const,
-            text: `Booking failed: ${message}`,
+            text: `Booking failed: ${formatError(error)}`,
           },
         ],
         isError: true,
