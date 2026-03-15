@@ -27,6 +27,30 @@ function loadCustomerConfig(): CustomerConfig {
   }
 }
 
+/**
+ * Build ISO 8601 datetime with the correct UTC offset for the shop's timezone.
+ * Timeslots from the API are in the shop's local time, so we must send them
+ * back with the matching offset (e.g. +01:00 for CET, +02:00 for CEST).
+ */
+function buildStartsAt(date: string, time: string, timezone?: string): string {
+  const naive = `${date}T${time}:00.000`;
+  if (!timezone) return `${naive}+00:00`;
+  try {
+    const instant = new Date(`${naive}Z`);
+    const utcParts = instant.toLocaleString("en-US", { timeZone: "UTC" });
+    const tzParts = instant.toLocaleString("en-US", { timeZone: timezone });
+    const offsetMs =
+      new Date(tzParts).getTime() - new Date(utcParts).getTime();
+    const sign = offsetMs >= 0 ? "+" : "-";
+    const absMin = Math.round(Math.abs(offsetMs) / 60000);
+    const hh = String(Math.floor(absMin / 60)).padStart(2, "0");
+    const mm = String(absMin % 60).padStart(2, "0");
+    return `${naive}${sign}${hh}:${mm}`;
+  } catch {
+    return `${naive}+00:00`;
+  }
+}
+
 export const bookAppointmentTool = {
   name: "book-appointment",
   description:
@@ -206,20 +230,8 @@ export const bookAppointmentTool = {
         };
       }
 
-      // 5. Create reservation (with timezone offset)
-      let startsAt = `${date}T${time}:00`;
-      if (company.timezone) {
-        const local = new Date(`${date}T${time}:00`);
-        const offset = new Intl.DateTimeFormat("en", {
-          timeZone: company.timezone,
-          timeZoneName: "longOffset",
-        })
-          .formatToParts(local)
-          .find((p) => p.type === "timeZoneName")?.value ?? "";
-        // "GMT+01:00" → "+01:00", "GMT" → "+00:00"
-        const tz = offset === "GMT" ? "+00:00" : offset.replace("GMT", "");
-        startsAt = `${date}T${time}:00${tz}`;
-      }
+      // 5. Create reservation — API requires ISO 8601 with timezone offset
+      const startsAt = buildStartsAt(date, time, company.timezone);
       const reservation = await createReservation(
         company.id,
         [service.id],
