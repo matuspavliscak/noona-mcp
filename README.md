@@ -105,6 +105,8 @@ The `book-appointment` tool reads this file automatically when contact fields ar
 | `book-appointment` | Book an appointment (reserve + confirm). Contact fields optional if `~/.noona/config.json` exists. |
 | `cancel-booking` | Cancel an existing booking by ID. |
 
+> **Note:** Company, employee, and service data is cached in memory for 5 minutes to reduce API calls. If you've just made changes on the Noona side (e.g. added an employee or service), wait a few minutes or restart the MCP server to see updates.
+
 ## Usage
 
 You can use the tools directly, or create a **Claude Code skill** for businesses you visit regularly.
@@ -137,6 +139,27 @@ From then on, just say `/barber` and Claude shows availability for your preferre
 ![Booking a barber appointment from the CLI](assets/barber-cli.png)
 
 You can create multiple skills — `/massage`, `/nails`, `/dentist` — each pointing to a different Noona business with your preferred settings. They all share the same `~/.noona/config.json` for contact info.
+
+## Troubleshooting
+
+### "Could not find a company or brand"
+
+- Double-check the slug or URL — go to [noona.app](https://noona.app), search for the business, and copy the URL from the address bar.
+- The Noona API might be temporarily unavailable. Try again in a few minutes.
+
+### `tsx` not found
+
+- Make sure you ran `npm install` in the project directory.
+- For Claude Desktop, use the full path to `tsx` inside `node_modules` (see setup instructions above).
+
+### Stale data (missing employees or services)
+
+- The server caches company, employee, and service data for 5 minutes. Restart the MCP server to force a refresh.
+
+### Booking fails with unclear error
+
+- Ensure `~/.noona/config.json` exists and contains valid JSON with `customerName`, `customerPhone`, `phoneCountryCode`, and `customerEmail`.
+- Check that the date format is `YYYY-MM-DD` and time format is `HH:MM`.
 
 ## License
 
