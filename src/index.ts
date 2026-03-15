@@ -10,18 +10,12 @@ import { cancelBookingTool } from "./tools/cancel-booking.js";
 
 const server = new McpServer(SERVER_CONFIG);
 
-const tools = [
-  getCompanyInfoTool,
-  getAvailabilityTool,
-  listEmployeesTool,
-  listServicesTool,
-  bookAppointmentTool,
-  cancelBookingTool,
-];
-
-for (const tool of tools) {
-  server.tool(tool.name, tool.description, tool.parameters, tool.handler);
-}
+server.tool(getCompanyInfoTool.name, getCompanyInfoTool.description, getCompanyInfoTool.parameters, getCompanyInfoTool.handler);
+server.tool(getAvailabilityTool.name, getAvailabilityTool.description, getAvailabilityTool.parameters, getAvailabilityTool.handler);
+server.tool(listEmployeesTool.name, listEmployeesTool.description, listEmployeesTool.parameters, listEmployeesTool.handler);
+server.tool(listServicesTool.name, listServicesTool.description, listServicesTool.parameters, listServicesTool.handler);
+server.tool(bookAppointmentTool.name, bookAppointmentTool.description, bookAppointmentTool.parameters, bookAppointmentTool.handler);
+server.tool(cancelBookingTool.name, cancelBookingTool.description, cancelBookingTool.parameters, cancelBookingTool.handler);
 
 async function main() {
   const transport = new StdioServerTransport();
